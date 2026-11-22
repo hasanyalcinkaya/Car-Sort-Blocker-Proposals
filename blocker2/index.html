@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#c9cdf5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Blocker 2 - First-Come Lot</title>
+<style>
+:root{--bg:#c9cdf5;--outer:#8f95d6;--panel:#262a52;--slot:#363b6e;--road:#3a3f6b;--text:#1d2048;--muted:#4c5090}
+@media (prefers-color-scheme:dark){:root{--bg:#14163a;--outer:#0b0c22;--panel:#232757;--slot:#2f3470;--road:#2a2e63;--text:#eceeff;--muted:#a9aee6}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--outer);font-family:ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;color:var(--text);
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+/* Phone frame: full screen on mobile, centered phone-sized frame on wide screens */
+.phone{position:relative;width:100vw;height:100dvh;background:var(--bg);display:flex;flex-direction:column;
+  padding:max(10px,env(safe-area-inset-top)) 12px max(14px,env(safe-area-inset-bottom));overflow:hidden}
+@media (min-width:560px){
+  .phone{width:min(400px,calc((100dvh - 40px) * 9 / 19.5));height:min(866px,calc(100dvh - 40px));
+    border-radius:44px;box-shadow:0 0 0 10px #15172e,0 30px 60px rgba(0,0,0,.35)}
+}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:#262a52;font-size:20px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 rgba(0,0,0,.15)}
+.iconbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.spacer{width:44px;height:44px}
+.iconbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.traffic{display:flex;flex-direction:column;align-items:center;gap:4px}
+.light{display:flex;gap:5px;background:var(--panel);padding:6px 10px;border-radius:12px 12px 6px 6px}
+.light i{width:13px;height:13px;border-radius:50%;background:#555a8f}
+.light i.g{background:#3fbf4a}.light i.y{background:#ffd21f}.light i.r{background:#ff4d5a}
+.count{background:var(--panel);color:#fff;font-weight:800;font-size:18px;padding:4px 16px;border-radius:12px;min-width:76px;text-align:center}
+.moves{font-size:12px;font-weight:700;color:var(--muted)}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 0}
+canvas{display:block;touch-action:none;cursor:pointer}
+.msg{font-size:14px;font-weight:800;text-wrap:balance;line-height:1.35;color:var(--muted);text-align:center;padding:4px 8px 0}
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,17,45,.55);padding:24px}
+.overlay.show{display:flex}
+.card{background:#fff;color:#262a52;border-radius:24px;padding:22px 20px;text-align:center;width:100%;max-width:300px}
+.card h2{margin:0 0 6px;font-size:22px}
+.card p{margin:0 0 16px;font-size:14px;color:#4c5090}
+.card .row{display:flex;gap:10px;justify-content:center}
+.btn{border:0;border-radius:999px;padding:12px 20px;font:inherit;font-weight:800;font-size:15px;color:#fff;cursor:pointer;touch-action:manipulation}
+.btn.go{background:#3fbf4a}.btn.alt{background:#262a52}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="top">
+    <span class="spacer" aria-hidden="true"></span>
+    <div class="traffic">
+      <span class="light" id="light"><i></i><i></i><i></i></span>
+      <span class="count" id="count"></span>
+      <span class="moves" id="moves">Moves 0</span>
+    </div>
+    <button class="iconbtn" id="reset" aria-label="Restart">↻</button>
+  </div>
+  <div class="stage"><canvas id="cv" aria-label="Game board"></canvas></div>
+  <div class="msg" id="msg">Car Sort Blocker Proposal 2 - First-Come Lot</div>
+
+  <div class="overlay" id="win"><div class="card">
+    <h2>Level complete!</h2><p>All cars are parked.</p>
+    <div class="row"><button class="btn go" data-act="reset">Play again</button></div>
+  </div></div>
+  <div class="overlay" id="fail"><div class="card">
+    <h2>Traffic jam</h2><p>No car can move.</p>
+    <div class="row"><button class="btn go" data-act="reset">Restart</button></div>
+  </div></div>
+</div>
+
+<script>
+// ---- LEVEL: each letter is a ROW (2 cars side by side). Order: back -> front. R,B,G,Y = colors.
+// Lot order is clockwise: top row left to right (0,1,2), bottom row right to left (3,4,5).
+// At most ROAD_CAP rows can be on the road at the same time.
+// FIRST = the First-Come Lot: it starts empty with a "?" sign. The color of the first car that parks
+// there becomes the lot's color for the rest of the round; only that color can enter it afterwards.
+// Cars inside it can still leave freely.
+const ROWS = 4, ROAD_CAP = 4;
+const LEVEL = ["RPRP", "", "YBPP", "RGYR", "GGGB", "BYBY"];
+const FIRST = 1;
+
+// ---- Speed settings (px/s and seconds)
+const SPEED = 800, EXIT_T = .09, ENTER_T = .09, RELEASE_GAP = .035, GAP = 46;
+
+// ---- Geometry: portrait screen, rounded-rectangle road, 2x3 lots inside
+const W = 420, H = 740, TAU = Math.PI * 2;
+const ROAD_W = 62, X0 = 34, X1 = W - 34, Y0 = 34, Y1 = H - 34, CR = 70;
+const LOT_W = 86, ROW_H = 52, PAD = 6, LOT_D = ROWS * ROW_H + PAD * 2, LINK = 12;
+const COL = { R: "#ff4d5a", B: "#2f8cff", G: "#3fbf4a", Y: "#ffd21f", P: "#a35cff" };
+const COLS_X = [W / 2 - 100, W / 2, W / 2 + 100];
+
+// Road: clockwise segments (straight + quarter arc)
+const SEG = [];
+(function buildPath() {
+  const L = (ax, ay, bx, by) => SEG.push({ t: "l", ax, ay, bx, by, len: Math.hypot(bx - ax, by - ay) });
+  const A = (cx, cy, a0) => SEG.push({ t: "a", cx, cy, a0, len: CR * Math.PI / 2 });
+  L(X0 + CR, Y0, X1 - CR, Y0); A(X1 - CR, Y0 + CR, -Math.PI / 2);
+  L(X1, Y0 + CR, X1, Y1 - CR); A(X1 - CR, Y1 - CR, 0);
+  L(X1 - CR, Y1, X0 + CR, Y1); A(X0 + CR, Y1 - CR, Math.PI / 2);
+  L(X0, Y1 - CR, X0, Y0 + CR); A(X0 + CR, Y0 + CR, Math.PI);
+})();
+const PLEN = SEG.reduce((a, s) => a + s.len, 0);
+function at(s) { // point on the road and heading
+  s = ((s % PLEN) + PLEN) % PLEN;
+  for (const g of SEG) {
+    if (s <= g.len) {
+      if (g.t === "l") { const f = s / g.len; return [g.ax + (g.bx - g.ax) * f, g.ay + (g.by - g.ay) * f, Math.atan2(g.by - g.ay, g.bx - g.ax)]; }
+      const a = g.a0 + s / CR; return [g.cx + CR * Math.cos(a), g.cy + CR * Math.sin(a), a + Math.PI / 2];
+    }
+    s -= g.len;
+  }
+  return at(0);
+}
+// Lots: top row exits upward, bottom row exits downward
+const LOTS = [0, 1, 2, 2, 1, 0].map((c, j) => {
+  const top = j < 3, x = COLS_X[c], uy = top ? -1 : 1;
+  const frontY = top ? Y0 + ROAD_W / 2 + LINK : Y1 - ROAD_W / 2 - LINK;
+  const backY = frontY - uy * LOT_D;
+  const gate = top ? (x - (X0 + CR)) : (SEG[0].len + SEG[1].len + SEG[2].len + SEG[3].len + (X1 - CR - x));
+  return { x, uy, frontY, backY, gate, top };
+});
+const slotPos = (j, i) => { const g = LOTS[j]; return [g.x, g.backY + g.uy * (PAD + ROW_H * (i + .5))]; };
+const lotRect = j => { const g = LOTS[j]; return [g.x - LOT_W / 2, Math.min(g.frontY, g.backY), LOT_W, LOT_D]; };
+const ease = t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+const lerp = (a, b, t) => a + (b - a) * t;
+const wrapA = a => ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+const lerpA = (a, b, t) => a + wrapA(b - a) * t;
+const md = d => ((d % PLEN) + PLEN) % PLEN;
+
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+cv.width = W * dpr; cv.height = H * dpr;
+function fit() { // fit the board into the available space
+  const st = cv.parentElement, r = st.getBoundingClientRect();
+  const sc = Math.min(r.width / W, (r.height - 12) / H);
+  cv.style.width = W * sc + "px"; cv.style.height = H * sc + "px";
+}
+new ResizeObserver(fit).observe(cv.parentElement); fit();
+
+let lots, pairs, claimed, claimT, moves, over;
+const setMsg = () => {}; // bottom text stays as a fixed title
+const isDone = l => l.hid === 0 && l.rows.length === ROWS && l.rows.every(c => c === l.rows[0]);
+const busyLot = j => pairs.some(p => p.o === j && (p.mode === "wait" || p.mode === "exit"));
+
+function init() {
+  lots = LEVEL.map(s => ({ rows: s.split(""), hid: 0, rel: 0 }));
+  pairs = []; claimed = null; claimT = 9; moves = 0; over = false;
+  $("win").classList.remove("show"); $("fail").classList.remove("show");
+  setMsg("Tap a lot to send its front cars onto the road.");
+}
+function frontGroup(rows) { let n = 0; while (n < rows.length && rows[rows.length - 1 - n] === rows[rows.length - 1]) n++; return n; }
+function canSend(j) {
+  const l = lots[j];
+  return l.rows.length && !isDone(l) && !l.hid && !busyLot(j) && pairs.length < ROAD_CAP;
+}
+function elig(p, j) {
+  const l = lots[j];
+  return !isDone(l) && l.rows.length < ROWS && !busyLot(j) &&
+    (j !== FIRST || !claimed || claimed === p.c) &&
+    (!l.rows.length || l.rows[l.rows.length - 1] === p.c);
+}
+
+// ---- Input
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  for (let j = 0; j < 6; j++) {
+    const [rx, ry, rw, rh] = lotRect(j);
+    if (x >= rx - 6 && x <= rx + rw + 6 && y >= ry - 6 && y <= ry + rh + 6) return tap(j);
+  }
+});
+function tap(j) {
+  const l = lots[j];
+  if (!l.rows.length || isDone(l) || l.hid || busyLot(j)) return;
+  const free = ROAD_CAP - pairs.length;
+  if (free <= 0) { flash(j); setMsg("The road is full."); return; }
+  const grp = frontGroup(l.rows), g = Math.min(grp, free); // only as many as fit on the road leave
+  const color = l.rows[l.rows.length - 1], n = l.rows.length;
+  for (let k = 0; k < g; k++) pairs.push({ c: color, o: j, mode: "wait", slot: n - 1 - k, t: 0, s: 0 });
+  l.rows.splice(n - g, g); moves++;
+  setMsg(g < grp ? "Only " + g * 2 + " cars fit; " + (grp - g) * 2 + " stay in the lot." : "");
+}
+let flashLot = -1, flashT = 0;
+function flash(j) { flashLot = j; flashT = .3; try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} }
+
+$("reset").onclick = init;
+document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => $(b.dataset.act).click());
+document.addEventListener("dblclick", e => e.preventDefault());
+
+// ---- Simulation
+function gateFree(j) {
+  const gs = LOTS[j].gate;
+  return !pairs.some(p => p.mode === "ring" && (md(p.s - gs) < GAP || md(gs - p.s) < GAP + SPEED * EXIT_T)) &&
+         !pairs.some(p => p.mode === "exit" && p.o === j);
+}
+function step(dt) {
+  if (flashT > 0) flashT -= dt;
+  claimT += dt;
+  lots.forEach((l, j) => {
+    l.rel -= dt;
+    const w = pairs.filter(p => p.o === j && p.mode === "wait");
+    if (w.length && l.rel <= 0 && gateFree(j)) {
+      const p = w.reduce((a, b) => a.slot > b.slot ? a : b);
+      p.mode = "exit"; p.t = 0; l.rel = RELEASE_GAP;
+    }
+  });
+  const gone = [];
+  for (const p of pairs) {
+    if (p.mode === "exit") { p.t += dt / EXIT_T; if (p.t >= 1) { p.mode = "ring"; p.s = LOTS[p.o].gate; } }
+    else if (p.mode === "enter") {
+      p.t += dt / ENTER_T;
+      if (p.t >= 1) {
+        const l = lots[p.lot]; l.hid--; gone.push(p);
+      }
+    } else if (p.mode === "ring") {
+      const prev = p.s, d = SPEED * dt; p.s = md(prev + d);
+      for (let j = 0; j < 6; j++) {
+        const k = md(LOTS[j].gate - prev);
+        if (k > 0 && k <= d && elig(p, j)) {
+          const l = lots[j]; l.rows.push(p.c); l.hid++;
+          if (j === FIRST && !claimed) { claimed = p.c; claimT = 0; } // first car decides the lot's color
+          p.mode = "enter"; p.lot = j; p.slot = l.rows.length - 1; p.t = 0; break;
+        }
+      }
+    }
+  }
+  if (gone.length) pairs = pairs.filter(p => !gone.includes(p));
+}
+let chk = 0;
+function checkEnd(dt) {
+  chk -= dt; if (chk > 0 || over) return; chk = .4;
+  if (!pairs.length && lots.every(l => !l.rows.length || isDone(l))) { over = true; $("win").classList.add("show"); return; }
+  if (pairs.some(p => p.mode !== "ring") || lots.some(l => l.hid)) return;
+  const anyEnter = pairs.some(p => lots.some((l, j) => elig(p, j)));
+  const anySend = lots.some((l, j) => canSend(j));
+  if (!anyEnter && !anySend) { over = true; $("fail").classList.add("show"); }
+}
+
+// ---- Drawing
+function pose(p) {
+  if (p.mode === "wait") { const [x, y] = slotPos(p.o, p.slot); return [x, y, LOTS[p.o].uy * Math.PI / 2]; }
+  if (p.mode === "exit") {
+    const g = LOTS[p.o], t = ease(Math.min(p.t, 1)), [x0, y0] = slotPos(p.o, p.slot), [x1, y1, h] = at(g.gate);
+    return [lerp(x0, x1, t), lerp(y0, y1, t), lerpA(g.uy * Math.PI / 2, h, t)];
+  }
+  if (p.mode === "enter") {
+    const g = LOTS[p.lot], t = ease(Math.min(p.t, 1)), [x0, y0, h] = at(g.gate), [x1, y1] = slotPos(p.lot, p.slot);
+    return [lerp(x0, x1, t), lerp(y0, y1, t), lerpA(h, -g.uy * Math.PI / 2, t)];
+  }
+  return at(p.s);
+}
+function car(x, y, psi, c) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(psi);
+  ctx.fillStyle = COL[c]; ctx.beginPath(); ctx.roundRect(-19, -15, 38, 30, 8); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.beginPath(); ctx.roundRect(-19, 9, 38, 6, 3); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.beginPath(); ctx.roundRect(2, -11, 11, 22, 3); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.3)"; ctx.beginPath(); ctx.roundRect(-14, -10, 7, 20, 3); ctx.fill();
+  ctx.restore();
+}
+function pairAt(x, y, psi, c) {
+  const ox = Math.cos(psi + Math.PI / 2) * 17, oy = Math.sin(psi + Math.PI / 2) * 17;
+  car(x - ox, y - oy, psi, c); car(x + ox, y + oy, psi, c);
+}
+function draw() {
+  const st = getComputedStyle(document.documentElement), v = n => st.getPropertyValue(n).trim();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  // road + lot connectors
+  ctx.strokeStyle = v("--road"); ctx.lineCap = "butt";
+  LOTS.forEach(g => { ctx.lineWidth = 46; ctx.beginPath(); ctx.moveTo(g.x, g.top ? Y0 : Y1); ctx.lineTo(g.x, g.frontY); ctx.stroke(); });
+  const rr = () => { ctx.beginPath(); ctx.roundRect(X0, Y0, X1 - X0, Y1 - Y0, CR); };
+  ctx.lineWidth = ROAD_W; rr(); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 3; ctx.setLineDash([14, 16]); rr(); ctx.stroke(); ctx.setLineDash([]);
+  // lots
+  lots.forEach((l, j) => {
+    const g = LOTS[j], done = isDone(l), [rx, ry, rw, rh] = lotRect(j);
+    ctx.save();
+    if (flashT > 0 && flashLot === j) ctx.translate(Math.sin(flashT * 60) * 4, 0);
+    ctx.globalAlpha = done ? .55 : 1;
+    ctx.fillStyle = v("--panel"); ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, 16); ctx.fill();
+    for (let i = 0; i < ROWS; i++) {
+      const [, sy] = slotPos(j, i);
+      ctx.fillStyle = v("--slot"); ctx.beginPath(); ctx.roundRect(rx + 4, sy - ROW_H / 2 + 2, rw - 8, ROW_H - 4, 9); ctx.fill();
+    }
+    if (j === FIRST && !done) { // dashed white frame while unclaimed, solid lot-color frame once claimed
+      ctx.strokeStyle = claimed ? COL[claimed] : "#fff"; ctx.lineWidth = claimed ? 4 : 3;
+      if (!claimed) ctx.setLineDash([7, 6]);
+      ctx.beginPath(); ctx.roundRect(rx - 5, ry - 5, rw + 10, rh + 10, 20); ctx.stroke(); ctx.setLineDash([]);
+      if (claimed && claimT < .7) { // pulse when the color is decided
+        const k = claimT / .7; ctx.globalAlpha = 1 - k; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.roundRect(rx - 5 - k * 14, ry - 5 - k * 14, rw + 10 + k * 28, rh + 10 + k * 28, 20 + k * 10); ctx.stroke();
+        ctx.globalAlpha = done ? .55 : 1;
+      }
+      if (claimed) { ctx.fillStyle = COL[claimed]; ctx.globalAlpha = .18; ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, 16); ctx.fill(); ctx.globalAlpha = 1; }
+    }
+    const vis = l.rows.length - l.hid;
+    for (let i = 0; i < vis; i++) { const [x, y] = slotPos(j, i); pairAt(x, y, g.uy * Math.PI / 2, l.rows[i]); }
+    if (canSend(j)) {
+      const gr = Math.min(frontGroup(l.rows), ROAD_CAP - pairs.length), n = l.rows.length, [, a] = slotPos(j, n - gr), [, b] = slotPos(j, n - 1);
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath();
+      ctx.roundRect(rx + 2, Math.min(a, b) - ROW_H / 2, rw - 4, Math.abs(b - a) + ROW_H, 10); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    const ty = g.backY + (g.top ? 14 : -14);
+    ctx.font = "20px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if (j === FIRST && !done) { // the lot's sign: "?" until the first car decides its color
+      const sy = g.top ? g.backY + 20 : g.backY - 20, pop = claimed && claimT < .35 ? 1 + Math.sin(claimT / .35 * Math.PI) * .35 : 1;
+      ctx.save(); ctx.translate(g.x, sy); ctx.scale(pop, pop);
+      ctx.fillStyle = claimed ? COL[claimed] : "#fff"; ctx.strokeStyle = "#262a52"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill(); ctx.stroke();
+      if (!claimed) { ctx.fillStyle = "#262a52"; ctx.font = "bold 18px sans-serif"; ctx.fillText("?", 0, 1); }
+      ctx.restore();
+    }
+    if (done) { ctx.fillStyle = "#3fbf4a"; ctx.beginPath(); ctx.arc(g.x, ty, 13, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "bold 16px sans-serif"; ctx.fillText("✓", g.x, ty + 1); }
+  });
+  // cars on the road
+  for (const p of pairs) { const [x, y, psi] = pose(p); pairAt(x, y, psi, p.c); }
+  // HUD
+  const n = pairs.length, r = n / ROAD_CAP;
+  $("count").textContent = n * 2 + "/" + ROAD_CAP * 2;
+  const L = $("light").children, cls = ["g", "y", "r"], lv = r === 0 ? 0 : r < .5 ? 1 : r < 1 ? 2 : 3;
+  [...L].forEach((d, k) => d.className = k < lv ? cls[lv === 1 ? 0 : k] : "");
+  $("moves").textContent = "Moves " + moves;
+}
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  step(dt); checkEnd(dt); draw(); requestAnimationFrame(loop);
+}
+init(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
