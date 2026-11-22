@@ -160,7 +160,8 @@ function canSend(j) {
 }
 function elig(p, j) {
   const l = lots[j];
-  return !(j === CLOSE && closed) && !isDone(l) && l.rows.length < ROWS && !busyLot(j) &&
+  // closed: no entry; closing (count hit 0): an empty lot takes no new cars, a started lot can still be finished
+  return !(j === CLOSE && (closed || (closing && !l.rows.length))) && !isDone(l) && l.rows.length < ROWS && !busyLot(j) &&
     (!l.rows.length || l.rows[l.rows.length - 1] === p.c);
 }
 
