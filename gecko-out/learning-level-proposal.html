@@ -6,7 +6,8 @@
 <title>Learning Level - Ghost Gecko</title>
 <style>
 /* One committed game look (light board, like the real game), so colors are set explicitly. */
-:root{--outer:#9fb2cc;--bg:#dfe7f2;--banner:#3a4a78;--ink:#26324f;--muted:#55627f;color-scheme:light}
+:root{--bg:#c9cdf5;--outer:#8f95d6;--panel:#262a52;--ink:#1d2048;--muted:#4c5090;--cardink:#262a52;--cardmuted:#4c5090;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#14163a;--outer:#0b0c22;--panel:#232757;--ink:#eceeff;--muted:#a9aee6;color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:var(--outer);font-family:ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;color:var(--ink);
@@ -16,20 +17,20 @@ body{background:var(--outer);font-family:ui-rounded,"Nunito","Segoe UI",system-u
   padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));overflow:hidden}
 @media (min-width:560px){
   .phone{width:min(400px,calc((100dvh - 40px) * 9 / 19.5));height:min(866px,calc(100dvh - 40px));
-    border-radius:44px;box-shadow:0 0 0 10px #1c2440,0 30px 60px rgba(0,0,0,.35)}
+    border-radius:44px;box-shadow:0 0 0 10px #15172e,0 30px 60px rgba(0,0,0,.35)}
 }
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:var(--ink);font-size:20px;font-weight:800;
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:var(--cardink);font-size:20px;font-weight:800;
   display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 rgba(0,0,0,.15)}
 .iconbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
 .iconbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .spacer{width:44px;height:44px}
 .mid{display:flex;flex-direction:column;align-items:center;gap:4px}
 .lvl{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
-.timer{display:flex;align-items:center;gap:6px;background:#2f7de1;color:#fff;font-weight:800;font-size:18px;padding:4px 14px;border-radius:12px;
+.timer{display:flex;align-items:center;gap:6px;background:var(--panel);color:#fff;font-weight:800;font-size:18px;padding:4px 14px;border-radius:12px;
   font-variant-numeric:tabular-nums;box-shadow:0 3px 0 rgba(0,0,0,.18)}
-.timer.low{background:#e14a4a}
-.banner{background:var(--banner);color:#fff;font-weight:800;font-size:14px;line-height:1.35;text-align:center;text-wrap:balance;
+.timer.low{background:#ff4d5a}
+.banner{background:var(--panel);color:#fff;font-weight:800;font-size:14px;line-height:1.35;text-align:center;text-wrap:balance;
   padding:10px 14px;border-radius:14px;transition:transform .25s}
 .banner.pop{transform:scale(1.05)}
 .banner small{display:block;font-weight:700;font-size:11px;opacity:.7;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
@@ -38,9 +39,9 @@ canvas{display:block;touch-action:none;cursor:grab}
 .msg{font-size:13px;font-weight:800;text-wrap:balance;line-height:1.35;color:var(--muted);text-align:center;padding:0 8px}
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,26,50,.55);padding:24px}
 .overlay.show{display:flex}
-.card{background:#fff;color:var(--ink);border-radius:24px;padding:22px 20px;text-align:center;width:100%;max-width:300px}
+.card{background:#fff;color:var(--cardink);border-radius:24px;padding:22px 20px;text-align:center;width:100%;max-width:300px}
 .card h2{margin:0 0 6px;font-size:22px}
-.card p{margin:0 0 16px;font-size:14px;color:var(--muted);line-height:1.4}
+.card p{margin:0 0 16px;font-size:14px;color:var(--cardmuted);line-height:1.4}
 .card .rule{background:#e8f4ff;border-radius:12px;padding:10px 12px;color:#1e5aa8;font-weight:800;margin-bottom:16px}
 .toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;pointer-events:none;
   background:#fff;border-radius:22px;padding:18px 20px 16px;width:min(300px,calc(100% - 48px));text-align:center;
@@ -48,7 +49,7 @@ canvas{display:block;touch-action:none;cursor:grab}
 .toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
 .toast .ice{font-size:30px;line-height:1}
 .toast h3{margin:6px 0 4px;font-size:18px;text-wrap:balance;color:#1e5aa8}
-.toast p{margin:0;font-size:14px;color:var(--muted);line-height:1.4}
+.toast p{margin:0;font-size:14px;color:var(--cardmuted);line-height:1.4}
 .toast .tap{margin-top:10px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9aa6bd}
 .btn{border:0;border-radius:999px;padding:12px 22px;font:inherit;font-weight:800;font-size:15px;color:#fff;background:#3fbf4a;cursor:pointer;touch-action:manipulation}
 </style>
