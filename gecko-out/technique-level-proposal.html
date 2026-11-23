@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Technique Level - Swap Loop</title>
+<style>
+/* Same page look as the other case-study prototypes (Car Sort palette); the board keeps the Gecko Out look. */
+:root{--bg:#c9cdf5;--outer:#8f95d6;--panel:#262a52;--ink:#1d2048;--muted:#4c5090;--cardink:#262a52;--cardmuted:#4c5090;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#14163a;--outer:#0b0c22;--panel:#232757;--ink:#eceeff;--muted:#a9aee6;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--outer);font-family:ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+.phone{position:relative;width:100vw;height:100dvh;background:var(--bg);display:flex;flex-direction:column;gap:8px;
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));overflow:hidden}
+@media (min-width:560px){
+  .phone{width:min(400px,calc((100dvh - 40px) * 9 / 19.5));height:min(866px,calc(100dvh - 40px));
+    border-radius:44px;box-shadow:0 0 0 10px #15172e,0 30px 60px rgba(0,0,0,.35)}
+}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:var(--cardink);font-size:20px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 rgba(0,0,0,.15)}
+.iconbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.iconbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.spacer{width:44px;height:44px}
+.mid{display:flex;flex-direction:column;align-items:center;gap:4px}
+.lvl{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.timer{display:flex;align-items:center;gap:6px;background:var(--panel);color:#fff;font-weight:800;font-size:18px;padding:4px 14px;border-radius:12px;
+  font-variant-numeric:tabular-nums;box-shadow:0 3px 0 rgba(0,0,0,.18);transition:background .3s}
+.timer.waiting{background:#3fbf4a}
+.timer.low{background:#ff4d5a}
+.timer small{font-size:11px;font-weight:800;opacity:.9;letter-spacing:.04em;text-transform:uppercase}
+.banner{background:var(--panel);color:#fff;font-weight:800;font-size:14px;line-height:1.35;text-align:center;text-wrap:balance;padding:10px 14px;border-radius:14px}
+.banner small{display:block;font-weight:700;font-size:11px;opacity:.7;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;touch-action:none;cursor:grab}
+.msg{font-size:13px;font-weight:800;text-wrap:balance;line-height:1.35;color:var(--muted);text-align:center;padding:0 8px}
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,26,50,.55);padding:24px}
+.overlay.show{display:flex}
+.card{background:#fff;color:var(--cardink);border-radius:24px;padding:22px 20px;text-align:center;width:100%;max-width:300px}
+.card h2{margin:0 0 16px;font-size:22px}
+.card p{margin:0 0 16px;font-size:14px;color:var(--cardmuted);line-height:1.4}
+.card .rule{background:#efeafb;border-radius:12px;padding:10px 12px;color:#5b3bb5;font-weight:800;margin-bottom:16px;line-height:1.35}
+.btn{border:0;border-radius:999px;padding:12px 22px;font:inherit;font-weight:800;font-size:15px;color:#fff;background:#3fbf4a;cursor:pointer;touch-action:manipulation}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="top">
+    <span class="spacer" aria-hidden="true"></span>
+    <div class="mid"><span class="lvl">Technique · Loop</span><span class="timer waiting" id="timer"></span></div>
+    <button class="iconbtn" id="reset" aria-label="Restart">↻</button>
+  </div>
+  <div class="banner">Timer starts on your first move.</div>
+  <div class="stage"><canvas id="cv" aria-label="Game board"></canvas></div>
+  <div class="msg">Technique Level Proposal - Swap Loop</div>
+
+  <div class="overlay" id="win"><div class="card">
+    <h2>Level complete!</h2>
+    <button class="btn" data-act="reset">Play again</button>
+  </div></div>
+  <div class="overlay" id="fail"><div class="card">
+    <h2>Time's up</h2>
+    <button class="btn" data-act="reset">Restart</button>
+  </div></div>
+</div>
+
+<script>
+// ---- LEVEL: a crowded figure-eight around two wall islands. '#' = no board, '.' = path, letters = holes.
+// Every hole sits behind another gecko; geckos must circle the islands to trade places.
+const MAP = [
+  "##R###G##",
+  "#.......#",
+  "#.##.##.#",
+  "B.##.##.#",
+  "#.......Y",
+  "####.####",
+  "####P####",
+];
+const COLS = 9, ROWS = 7, TIME = 120;
+const COL = { R: "#ff4d5a", G: "#43c25a", B: "#2f8cff", Y: "#ffd21f", P: "#a35cff" };
+const DARK = { R: "#cf2f3b", G: "#2f9a43", B: "#1f68c9", Y: "#d9ad00", P: "#7a3ad1" };
+const GECKOS = [ // cells listed head first; 3 free cells, shortest solution is 47 single-cell moves
+  { c: "R", cells: [[6,4],[7,4],[7,3],[7,2]] },
+  { c: "G", cells: [[4,5],[4,4],[3,4],[2,4]] },
+  { c: "B", cells: [[6,1],[5,1],[4,1],[4,2]] },
+  { c: "Y", cells: [[3,1],[2,1],[1,1]] },
+  { c: "P", cells: [[1,2],[1,3],[1,4]] },
+];
+
+// ---- Geometry
+const S = 44, PAD = 14, W = COLS * S + PAD * 2, H = ROWS * S + PAD * 2;
+const cx = c => PAD + c * S + S / 2, cy = r => PAD + r * S + S / 2;
+const cell = (c, r) => (r >= 0 && r < ROWS && c >= 0 && c < COLS) ? MAP[r][c] : "#";
+const eq = (a, b) => a[0] === b[0] && a[1] === b[1];
+const holeAt = (c, r) => { const k = cell(c, r); return "RGBYP".includes(k) ? k : null; };
+
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+cv.width = W * dpr; cv.height = H * dpr;
+function fit() {
+  const r = cv.parentElement.getBoundingClientRect();
+  const sc = Math.min(r.width / W, r.height / H);
+  cv.style.width = W * sc + "px"; cv.style.height = H * sc + "px";
+}
+new ResizeObserver(fit).observe(cv.parentElement); fit();
+
+let geckos, timeLeft, started, over, drag;
+function init() {
+  geckos = GECKOS.map(g => ({ ...g, cells: g.cells.map(p => [...p]), prev: null, t: 1, exiting: false, gone: false }));
+  timeLeft = TIME; started = false; over = false; drag = null;
+  $("win").classList.remove("show"); $("fail").classList.remove("show");
+}
+const occupied = (c, r, self) => geckos.some(g => g !== self && !g.gone && g.cells.some(p => p[0] === c && p[1] === r));
+
+// ---- Moves: index 0 is always the head; either end can be dragged
+function tryMove(g, end, to) {
+  if (g.exiting || g.gone || over) return false;
+  const [c, r] = to;
+  if (cell(c, r) === "#") return false;
+  const hole = holeAt(c, r);
+  if (hole && hole !== g.c) return false;
+  if (occupied(c, r, g)) return false;
+  const other = end === 0 ? g.cells[g.cells.length - 1] : g.cells[0];
+  if (g.cells.some(p => eq(p, to)) && !eq(other, to)) return false;
+  g.prev = g.cells.map(p => [...p]); g.t = 0;
+  g.cells = end === 0 ? [to, ...g.cells.slice(0, -1)] : [...g.cells.slice(1), to];
+  started = true; // the timer starts on the first move
+  if (hole) { g.exiting = true; g.hole = to; g.exitEnd = end; g.exitClock = 0; drag = null; }
+  return true;
+}
+
+// ---- Input
+function toCell(e) {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  return [Math.floor((x - PAD) / S), Math.floor((y - PAD) / S)];
+}
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault(); if (over) return;
+  const p = toCell(e);
+  const g = geckos.find(g => !g.gone && !g.exiting && g.cells.some(q => eq(q, p)));
+  if (!g) return;
+  const i = g.cells.findIndex(q => eq(q, p));
+  drag = { g, end: i < g.cells.length / 2 ? 0 : 1 }; cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const g = drag.g, end = drag.end, target = toCell(e);
+  for (let n = 0; n < 8 && drag; n++) {
+    const h = end === 0 ? g.cells[0] : g.cells[g.cells.length - 1]; if (eq(h, target)) break;
+    const dx = Math.sign(target[0] - h[0]), dy = Math.sign(target[1] - h[1]);
+    const ax = Math.abs(target[0] - h[0]) >= Math.abs(target[1] - h[1]);
+    const a = ax ? [h[0] + dx, h[1]] : [h[0], h[1] + dy], b = ax ? [h[0], h[1] + dy] : [h[0] + dx, h[1]];
+    if (!(tryMove(g, end, a) || ((ax ? dy : dx) !== 0 && tryMove(g, end, b)))) { g.nudge = .25; break; }
+  }
+});
+const endDrag = () => { drag = null; };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+$("reset").onclick = init;
+document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => $(b.dataset.act).click());
+
+// ---- Simulation
+function update(dt) {
+  if (started && !over) {
+    timeLeft -= dt;
+    if (timeLeft <= 0) { timeLeft = 0; over = true; $("fail").classList.add("show"); }
+  }
+  for (const g of geckos) {
+    if (g.t < 1) g.t = Math.min(1, g.t + dt / .07);
+    if (g.nudge > 0) g.nudge -= dt;
+    if (g.exiting && !g.gone) {
+      g.exitClock += dt;
+      while (g.exitClock > .06 && !g.gone) {
+        g.exitClock -= .06;
+        g.prev = g.cells.map(p => [...p]); g.t = 0;
+        g.cells = g.exitEnd === 0 ? [g.hole, ...g.cells.slice(0, -1)] : [...g.cells.slice(1), g.hole];
+        if (g.cells.every(p => eq(p, g.hole))) {
+          g.gone = true;
+          if (geckos.every(x => x.gone) && !over) { over = true; setTimeout(() => $("win").classList.add("show"), 350); }
+        }
+      }
+    }
+  }
+}
+
+// ---- Drawing
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function pts(g) {
+  const k = g.t < 1 && g.prev && g.prev.length === g.cells.length ? g.t : 1;
+  return g.cells.map((p, i) => {
+    const q = k < 1 ? g.prev[i] : p;
+    return [cx(q[0]) + (cx(p[0]) - cx(q[0])) * k, cy(q[1]) + (cy(p[1]) - cy(q[1])) * k];
+  });
+}
+function body(P, color, dark) {
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const path = () => { ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); };
+  path(); ctx.strokeStyle = dark; ctx.lineWidth = S * .7; ctx.stroke();
+  path(); ctx.strokeStyle = color; ctx.lineWidth = S * .58; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,.22)";
+  for (let i = 1; i < P.length; i++) { const [x, y] = P[i]; ctx.beginPath(); ctx.arc(x - 6, y - 5, 5, 0, 7); ctx.arc(x + 7, y + 6, 4, 0, 7); ctx.fill(); }
+  const [hx, hy] = P[0], [nx, ny] = P[1] || [hx, hy + 1];
+  const a = Math.atan2(hy - ny, hx - nx);
+  ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(hx, hy, S * .4, 0, 7); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, hy, S * .34, 0, 7); ctx.fill();
+  const ex = Math.cos(a + Math.PI / 2) * 8.5, ey = Math.sin(a + Math.PI / 2) * 8.5, fx = Math.cos(a) * 5, fy = Math.sin(a) * 5;
+  for (const s of [-1, 1]) {
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hx + ex * s + fx, hy + ey * s + fy, 6, 0, 7); ctx.fill();
+    ctx.fillStyle = "#1b1f2e"; ctx.beginPath(); ctx.arc(hx + ex * s + fx * 1.5, hy + ey * s + fy * 1.5, 3.2, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (cell(c, r) === "#") continue;
+    ctx.fillStyle = "#fff"; rr(PAD + c * S - 6, PAD + r * S - 6, S + 12, S + 12, 14); ctx.fill();
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (cell(c, r) === "#") continue;
+    ctx.fillStyle = (c + r) % 2 ? "#a9b8cd" : "#b1bfd2"; ctx.fillRect(PAD + c * S, PAD + r * S, S, S);
+  }
+  for (const g of geckos) {
+    if (g.gone) continue;
+    let P = pts(g);
+    if (g.nudge > 0) { const sh = Math.sin(g.nudge * 70) * 3; P = P.map(([x, y]) => [x + sh, y]); }
+    body(P, COL[g.c], DARK[g.c]);
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = holeAt(c, r); if (!k) continue;
+    ctx.fillStyle = COL[k]; ctx.beginPath(); ctx.arc(cx(c), cy(r), S * .44, 0, 7); ctx.fill();
+    ctx.strokeStyle = DARK[k]; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#1a1f2b"; ctx.beginPath(); ctx.arc(cx(c), cy(r), S * .27, 0, 7); ctx.fill();
+  }
+  const t = $("timer"), s = Math.ceil(timeLeft), clock = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  t.classList.toggle("waiting", !started);
+  t.classList.toggle("low", started && s <= 20);
+  t.textContent = "⏱ " + clock;
+}
+let last = performance.now();
+function loop(now) { const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; update(dt); draw(); requestAnimationFrame(loop); }
+init(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
