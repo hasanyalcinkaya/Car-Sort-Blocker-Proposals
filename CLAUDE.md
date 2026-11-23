@@ -6,7 +6,7 @@ The owner talks in Turkish; reply in Turkish. Deliverables (pages, write-ups) ar
 ## Structure
 - One folder per game. Start a new folder when a task moves to a new game.
   - `car-sort/` – Car Sort blocker proposals: `blocker1/` … `blocker4/` (each an `index.html`)
-  - `gecko-out/` – Gecko Out: `learning-level-proposal.html`
+  - `gecko-out/` – Gecko Out: `learning-level-proposal.html`, `technique-level-proposal.html`
 - Folder and file names: lowercase, words joined with hyphens, no spaces.
 
 ## Publishing
