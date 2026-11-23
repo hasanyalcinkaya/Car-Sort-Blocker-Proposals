@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Learning Level - Ghost Gecko</title>
+<style>
+/* One committed game look (light board, like the real game), so colors are set explicitly. */
+:root{--outer:#9fb2cc;--bg:#dfe7f2;--banner:#3a4a78;--ink:#26324f;--muted:#55627f;color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--outer);font-family:ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+.phone{position:relative;width:100vw;height:100dvh;background:var(--bg);display:flex;flex-direction:column;gap:8px;
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));overflow:hidden}
+@media (min-width:560px){
+  .phone{width:min(400px,calc((100dvh - 40px) * 9 / 19.5));height:min(866px,calc(100dvh - 40px));
+    border-radius:44px;box-shadow:0 0 0 10px #1c2440,0 30px 60px rgba(0,0,0,.35)}
+}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:var(--ink);font-size:20px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 rgba(0,0,0,.15)}
+.iconbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
+.iconbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.spacer{width:44px;height:44px}
+.mid{display:flex;flex-direction:column;align-items:center;gap:4px}
+.lvl{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.timer{display:flex;align-items:center;gap:6px;background:#2f7de1;color:#fff;font-weight:800;font-size:18px;padding:4px 14px;border-radius:12px;
+  font-variant-numeric:tabular-nums;box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.timer.low{background:#e14a4a}
+.banner{background:var(--banner);color:#fff;font-weight:800;font-size:14px;line-height:1.35;text-align:center;text-wrap:balance;
+  padding:10px 14px;border-radius:14px;transition:transform .25s}
+.banner.pop{transform:scale(1.05)}
+.banner small{display:block;font-weight:700;font-size:11px;opacity:.7;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;touch-action:none;cursor:grab}
+.msg{font-size:13px;font-weight:800;text-wrap:balance;line-height:1.35;color:var(--muted);text-align:center;padding:0 8px}
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,26,50,.55);padding:24px}
+.overlay.show{display:flex}
+.card{background:#fff;color:var(--ink);border-radius:24px;padding:22px 20px;text-align:center;width:100%;max-width:300px}
+.card h2{margin:0 0 6px;font-size:22px}
+.card p{margin:0 0 16px;font-size:14px;color:var(--muted);line-height:1.4}
+.card .rule{background:#e8f4ff;border-radius:12px;padding:10px 12px;color:#1e5aa8;font-weight:800;margin-bottom:16px}
+.toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;pointer-events:none;
+  background:#fff;border-radius:22px;padding:18px 20px 16px;width:min(300px,calc(100% - 48px));text-align:center;
+  box-shadow:0 12px 30px rgba(20,26,50,.3);transition:opacity .25s,transform .25s}
+.toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+.toast .ice{font-size:30px;line-height:1}
+.toast h3{margin:6px 0 4px;font-size:18px;text-wrap:balance;color:#1e5aa8}
+.toast p{margin:0;font-size:14px;color:var(--muted);line-height:1.4}
+.toast .tap{margin-top:10px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9aa6bd}
+.btn{border:0;border-radius:999px;padding:12px 22px;font:inherit;font-weight:800;font-size:15px;color:#fff;background:#3fbf4a;cursor:pointer;touch-action:manipulation}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="top">
+    <span class="spacer" aria-hidden="true"></span>
+    <div class="mid"><span class="lvl">Level 18 · Ice</span><span class="timer" id="timer">⏱ 2:00</span></div>
+    <button class="iconbtn" id="reset" aria-label="Restart">↻</button>
+  </div>
+  <div class="banner" id="banner"></div>
+  <div class="stage"><canvas id="cv" aria-label="Game board"></canvas></div>
+  <div class="msg">Learning Level Proposal - Ghost Gecko</div>
+
+  <div class="toast" id="toast" role="status">
+    <div class="ice" aria-hidden="true">🧊</div>
+    <h3>That's how you break the ice!</h3>
+    <p>Every gecko you send home lowers the numbers by 1. At 0, the ice breaks.</p>
+    <div class="tap">Tap to continue</div>
+  </div>
+
+  <div class="overlay" id="win"><div class="card">
+    <h2>Level complete!</h2>
+    <div class="rule">You freed every frozen gecko on your own.</div>
+    <button class="btn" data-act="reset">Play again</button>
+  </div></div>
+  <div class="overlay" id="fail"><div class="card">
+    <h2>Time's up</h2><p>Try again. The level is the same every time.</p>
+    <button class="btn" data-act="reset">Restart</button>
+  </div></div>
+</div>
+
+<script>
+// ---- LEVEL (grid columns x rows). '#' = no board cell, '.' = board cell, letters = holes.
+// Holes: G green, R red, Y yellow, P pink.
+const MAP = [
+  "#GRY##",
+  "......",
+  "......",
+  "......",
+  "......",
+  "......",
+  "P.....",
+  "#....#",
+];
+const COLS = 6, ROWS = 8;
+const COL = { P: "#ff6fb1", G: "#43c25a", R: "#ff4d5a", Y: "#ffd21f" };
+const DARK = { P: "#d84a8d", G: "#2f9a43", R: "#cf2f3b", Y: "#d9ad00" };
+// Geckos: cells listed head first. need = how many geckos must exit before it thaws (0 = free).
+const GECKOS = [
+  { c: "P", cells: [[5,5],[5,4],[5,3],[5,2]], need: 0, guided: true },
+  { c: "G", cells: [[1,1],[1,2],[1,3]], need: 1 },
+  { c: "R", cells: [[2,1],[2,2],[2,3]], need: 2 },
+  { c: "Y", cells: [[4,7],[3,7],[2,7],[1,7]], need: 3 },
+];
+// The ghost demonstrates this route for the guided gecko's head (ends in its hole).
+const ROUTE = [[5,6],[4,6],[3,6],[2,6],[1,6],[0,6]];
+const TIME = 120;
+
+// ---- Geometry
+const S = 56, PADX = 14, PADY = 14, W = COLS * S + PADX * 2, H = ROWS * S + PADY * 2;
+const cx = c => PADX + c * S + S / 2, cy = r => PADY + r * S + S / 2;
+const cell = (c, r) => (r >= 0 && r < ROWS && c >= 0 && c < COLS) ? MAP[r][c] : "#";
+const eq = (a, b) => a[0] === b[0] && a[1] === b[1];
+const holeAt = (c, r) => { const k = cell(c, r); return "PGRY".includes(k) ? k : null; };
+
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+cv.width = W * dpr; cv.height = H * dpr;
+function fit() {
+  const r = cv.parentElement.getBoundingClientRect();
+  const sc = Math.min(r.width / W, r.height / H);
+  cv.style.width = W * sc + "px"; cv.style.height = H * sc + "px";
+}
+new ResizeObserver(fit).observe(cv.parentElement); fit();
+
+let toastT = 0, geckos, exited, phase, step, timeLeft, over, drag, ghostT, ghostStates, thawFx, bannerKey;
+
+function init() {
+  geckos = GECKOS.map(g => ({ ...g, cells: g.cells.map(p => [...p]), prev: null, t: 1, exiting: false, gone: false, thawT: 9 }));
+  exited = 0; phase = 1; step = 0; timeLeft = TIME; over = false; drag = null; ghostT = 0; ghostStates = null;
+  $("win").classList.remove("show"); $("fail").classList.remove("show");
+  hideToast(); setBanner("watch");
+}
+function setBanner(k) {
+  if (bannerKey === k) return; bannerKey = k;
+  const b = $("banner");
+  b.innerHTML = k === "watch"
+    ? "<small>Step 1 · Watch, then do it</small>Watch the ghost, then take the pink gecko to its hole."
+    : "<small>Step 2 · On your own</small>Now free the frozen geckos yourself.";
+  b.classList.add("pop"); setTimeout(() => b.classList.remove("pop"), 250);
+}
+const frozen = g => exited < g.need;
+const occupied = (c, r, self) => geckos.some(g => g !== self && !g.gone && g.cells.some(p => p[0] === c && p[1] === r));
+
+// ---- Moves
+function tryMove(g, end, to) {
+  if (g.exiting || g.gone || frozen(g)) return false;
+  const [c, r] = to, k = cell(c, r);
+  if (k === "#") return false;
+  const hole = holeAt(c, r);
+  if (hole && hole !== g.c) return false;
+  if (occupied(c, r, g)) return false;
+  const other = end === 0 ? g.cells[g.cells.length - 1] : g.cells[0];
+  if (g.cells.some(p => eq(p, to)) && !eq(other, to)) return false;
+  if (phase === 1 && !g.guided) return false; // step 1: the guided gecko must go first, by any route
+  g.prev = g.cells.map(p => [...p]); g.t = 0;
+  // index 0 is always the head; a tail move shifts the body the other way
+  g.cells = end === 0 ? [to, ...g.cells.slice(0, -1)] : [...g.cells.slice(1), to];
+  if (hole) startExit(g, to, end);
+  return true;
+}
+function startExit(g, hole, end) { g.exiting = true; g.hole = hole; g.exitEnd = end; g.exitClock = 0; drag = null; }
+
+// ---- Ghost: precompute the guided gecko's states along the remaining route, then into the hole
+function buildGhost() {
+  const g = GECKOS.find(x => x.guided); // the ghost always replays the demo from the starting position
+  let s = g.cells.map(p => [...p]); const out = [s];
+  for (let i = 0; i < ROUTE.length; i++) { s = [ROUTE[i], ...s.slice(0, -1)]; out.push(s); }
+  const h = ROUTE[ROUTE.length - 1];
+  for (let i = 0; i < g.cells.length - 1; i++) { s = [h, ...s.slice(0, -1)]; out.push(s); }
+  return out;
+}
+
+// ---- Input
+function toCell(e) {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+  return [Math.floor((x - PADX) / S), Math.floor((y - PADY) / S)];
+}
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault(); if (over) return;
+  if (toastT > 0) { hideToast(); return; }
+  const p = toCell(e);
+  const g = geckos.find(g => !g.gone && !g.exiting && g.cells.some(q => eq(q, p)));
+  if (!g) return;
+  if (frozen(g)) { g.shake = .3; return; }
+  if (phase === 1 && !g.guided) { g.shake = .3; return; }
+  const i = g.cells.findIndex(q => eq(q, p));
+  let end = i < g.cells.length / 2 ? 0 : 1;
+  drag = { g, end }; cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const g = drag.g, end = drag.end, target = toCell(e);
+  for (let n = 0; n < 8 && drag; n++) {
+    const h = end === 0 ? g.cells[0] : g.cells[g.cells.length - 1]; if (eq(h, target)) break;
+    const dx = Math.sign(target[0] - h[0]), dy = Math.sign(target[1] - h[1]);
+    const ax = Math.abs(target[0] - h[0]) >= Math.abs(target[1] - h[1]);
+    const a = ax ? [h[0] + dx, h[1]] : [h[0], h[1] + dy], b = ax ? [h[0], h[1] + dy] : [h[0] + dx, h[1]];
+    if (!(tryMove(g, end, a) || ((ax ? dy : dx) !== 0 && tryMove(g, end, b)))) { if (phase === 1) g.nudge = .25; break; }
+  }
+});
+const endDrag = () => { drag = null; };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+$("reset").onclick = init;
+document.querySelectorAll("[data-act]").forEach(b => b.onclick = () => $(b.dataset.act).click());
+
+// ---- Simulation
+function update(dt) {
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) hideToast(); }
+  if (!over && toastT <= 0) {
+    timeLeft -= dt;
+    if (timeLeft <= 0) { timeLeft = 0; over = true; $("fail").classList.add("show"); }
+  }
+  for (const g of geckos) {
+    if (g.t < 1) g.t = Math.min(1, g.t + dt / .07);
+    if (g.shake > 0) g.shake -= dt;
+    if (g.nudge > 0) g.nudge -= dt;
+    g.thawT += dt;
+    if (g.exiting && !g.gone) {
+      g.exitClock += dt;
+      while (g.exitClock > .06 && !g.gone) {
+        g.exitClock -= .06;
+        g.prev = g.cells.map(p => [...p]); g.t = 0;
+        g.cells = g.exitEnd === 0 ? [g.hole, ...g.cells.slice(0, -1)] : [...g.cells.slice(1), g.hole];
+        if (g.cells.every(p => eq(p, g.hole))) { g.gone = true; onExit(g); }
+      }
+    }
+  }
+  if (phase === 1) ghostT += dt;
+}
+function onExit(g) {
+  const before = geckos.filter(x => frozen(x));
+  exited++;
+  before.forEach(x => { if (!frozen(x)) x.thawT = 0; });
+  if (g.guided) { phase = 2; setTimeout(showToast, 250); }
+  if (geckos.every(x => x.gone) && !over) { over = true; setTimeout(() => $("win").classList.add("show"), 350); }
+}
+
+// ---- Toast: a short explanation right after the guided move, then the player continues alone
+function showToast() { if (over) return; toastT = 3.2; drag = null; $("toast").classList.add("show"); }
+function hideToast() { toastT = 0; $("toast").classList.remove("show"); if (phase === 2) setBanner("solo"); }
+$("toast").addEventListener("pointerdown", e => { e.preventDefault(); hideToast(); });
+
+// ---- Drawing
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function pts(g) {
+  const k = g.t < 1 && g.prev && g.prev.length === g.cells.length ? g.t : 1;
+  return g.cells.map((p, i) => {
+    const q = k < 1 ? g.prev[i] : p;
+    return [cx(q[0]) + (cx(p[0]) - cx(q[0])) * k, cy(q[1]) + (cy(p[1]) - cy(q[1])) * k];
+  });
+}
+function body(P, color, dark, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const path = () => { ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); };
+  path(); ctx.strokeStyle = dark; ctx.lineWidth = S * .7; ctx.stroke();
+  path(); ctx.strokeStyle = color; ctx.lineWidth = S * .58; ctx.stroke();
+  // spots
+  ctx.fillStyle = "rgba(255,255,255,.22)";
+  for (let i = 1; i < P.length; i++) { const [x, y] = P[i]; ctx.beginPath(); ctx.arc(x - 6, y - 5, 5, 0, 7); ctx.arc(x + 7, y + 6, 4, 0, 7); ctx.fill(); }
+  // head
+  const [hx, hy] = P[0], [nx, ny] = P[1] || [hx, hy + 1];
+  let a = Math.atan2(hy - ny, hx - nx); if (P.length > 1 && hx === nx && hy === ny) a = -Math.PI / 2;
+  ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(hx, hy, S * .4, 0, 7); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, hy, S * .34, 0, 7); ctx.fill();
+  const ex = Math.cos(a + Math.PI / 2) * 9, ey = Math.sin(a + Math.PI / 2) * 9, fx = Math.cos(a) * 5, fy = Math.sin(a) * 5;
+  for (const s of [-1, 1]) {
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hx + ex * s + fx, hy + ey * s + fy, 6.5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#1b1f2e"; ctx.beginPath(); ctx.arc(hx + ex * s + fx * 1.5, hy + ey * s + fy * 1.5, 3.4, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  // board
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (cell(c, r) === "#") continue;
+    ctx.fillStyle = "#fff"; rr(PADX + c * S - 6, PADY + r * S - 6, S + 12, S + 12, 14); ctx.fill();
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (cell(c, r) === "#") continue;
+    ctx.fillStyle = (c + r) % 2 ? "#a9b8cd" : "#b1bfd2"; ctx.fillRect(PADX + c * S, PADY + r * S, S, S);
+  }
+  // ghost route dots + ghost gecko (phase 1)
+  if (phase === 1) {
+    ctx.fillStyle = "rgba(255,255,255,.75)";
+    for (let i = 0; i < ROUTE.length - 1; i++) { const [c, r] = ROUTE[i]; ctx.beginPath(); ctx.arc(cx(c), cy(r), 5, 0, 7); ctx.fill(); }
+    const g = geckos.find(x => x.guided);
+    if (!g.exiting) {
+      const SP = .3, PAUSE = .9;
+      if (!ghostStates) ghostStates = buildGhost();
+      const total = (ghostStates.length - 1) * SP + PAUSE;
+      if (ghostT > total) { ghostT = 0; ghostStates = buildGhost(); }
+      const k = Math.min(ghostT / SP, ghostStates.length - 1.0001), i = Math.floor(k), f = k - i;
+      const A = ghostStates[i], B = ghostStates[Math.min(i + 1, ghostStates.length - 1)];
+      const P = A.map((p, j) => [cx(p[0]) + (cx(B[j][0]) - cx(p[0])) * f, cy(p[1]) + (cy(B[j][1]) - cy(p[1])) * f]);
+      const fade = ghostT > (ghostStates.length - 1) * SP ? Math.max(0, 1 - (ghostT - (ghostStates.length - 1) * SP) / PAUSE) : 1;
+      body(P, "#ffffff", "#e9eef7", .55 * fade);
+    }
+  }
+  // geckos
+  for (const g of geckos) {
+    if (g.gone) continue;
+    let P = pts(g);
+    const sh = (g.shake > 0 ? Math.sin(g.shake * 60) * 4 : 0) + (g.nudge > 0 ? Math.sin(g.nudge * 70) * 3 : 0);
+    if (sh) P = P.map(([x, y]) => [x + sh, y]);
+    body(P, COL[g.c], DARK[g.c], 1);
+    // ice
+    if (frozen(g) || g.thawT < .45) {
+      const a = frozen(g) ? 1 : 1 - g.thawT / .45;
+      ctx.save(); ctx.globalAlpha = a;
+      for (const p of g.cells) {
+        const x = PADX + p[0] * S + 3, y = PADY + p[1] * S + 3;
+        ctx.fillStyle = "rgba(150,215,255,.62)"; rr(x, y, S - 6, S - 6, 8); ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x + 8, y + S - 22); ctx.lineTo(x + S - 26, y + 8); ctx.stroke();
+      }
+      const h = g.cells[0], left = Math.max(0, g.need - exited);
+      if (frozen(g)) {
+        ctx.fillStyle = "#fff"; rr(cx(h[0]) - 15, cy(h[1]) - 15, 30, 30, 9); ctx.fill();
+        ctx.fillStyle = "#1e5aa8"; ctx.font = "900 20px ui-rounded, Nunito, system-ui, sans-serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(left, cx(h[0]), cy(h[1]) + 1);
+      }
+      ctx.restore();
+    }
+  }
+  // holes on top, so geckos slide into them
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = holeAt(c, r); if (!k) continue;
+    ctx.fillStyle = COL[k]; ctx.beginPath(); ctx.arc(cx(c), cy(r), S * .44, 0, 7); ctx.fill();
+    ctx.strokeStyle = DARK[k]; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#1a1f2b"; ctx.beginPath(); ctx.arc(cx(c), cy(r), S * .27, 0, 7); ctx.fill();
+  }
+  // HUD
+  const s = Math.ceil(timeLeft), t = $("timer");
+  t.textContent = "⏱ " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  t.classList.toggle("low", s <= 30);
+}
+let last = performance.now();
+function loop(now) { const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; update(dt); draw(); requestAnimationFrame(loop); }
+init(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
